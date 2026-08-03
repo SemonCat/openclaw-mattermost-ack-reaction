@@ -57,7 +57,19 @@ export type ResolvedMattermostAckSettings = {
    * enables this plugin's lifecycle-reaction upgrade for Mattermost.
    */
   statusReactionsEnabled: boolean;
+  /** Global/per-channel queue mode; same-session lifecycle sharing is safe only for steer. */
+  queueMode: "steer" | "followup" | "collect" | "interrupt";
 };
+
+const QUEUE_MODES = new Set(["steer", "followup", "collect", "interrupt"] as const);
+
+function resolveMattermostQueueMode(config: OpenClawConfig): ResolvedMattermostAckSettings["queueMode"] {
+  const queue = config.messages?.queue;
+  const raw = queue?.byChannel?.mattermost ?? queue?.mode;
+  return typeof raw === "string" && QUEUE_MODES.has(raw as ResolvedMattermostAckSettings["queueMode"])
+    ? (raw as ResolvedMattermostAckSettings["queueMode"])
+    : "steer";
+}
 
 function pickFirstDefined<T>(...values: Array<T | undefined>): T | undefined {
   for (const value of values) {
@@ -124,6 +136,7 @@ export function resolveMattermostAckSettings(params: {
     isPrivateNetworkOptInEnabled(account) || isPrivateNetworkOptInEnabled(channel);
 
   const statusReactionsEnabled = params.config.messages?.statusReactions?.enabled !== false;
+  const queueMode = resolveMattermostQueueMode(params.config);
 
   return {
     accountId: resolvedAccountId,
@@ -134,5 +147,6 @@ export function resolveMattermostAckSettings(params: {
     scope,
     allowPrivateNetwork,
     statusReactionsEnabled,
+    queueMode,
   };
 }

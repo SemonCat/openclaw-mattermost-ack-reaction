@@ -208,4 +208,21 @@ describe("resolveMattermostAckSettings", () => {
       }).statusReactionsEnabled,
     ).toBe(false);
   });
+
+  it("defaults to steer queue mode and honors a Mattermost channel override", () => {
+    expect(
+      resolveMattermostAckSettings({ config: buildConfig({ channels: { mattermost: {} } }) })
+        .queueMode,
+    ).toBe("steer");
+    expect(
+      resolveMattermostAckSettings({
+        config: buildConfig({
+          messages: {
+            queue: { mode: "followup", byChannel: { mattermost: "collect" } },
+          },
+          channels: { mattermost: {} },
+        }),
+      }).queueMode,
+    ).toBe("collect");
+  });
 });

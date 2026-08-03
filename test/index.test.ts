@@ -377,6 +377,52 @@ describe("mattermost-ack-reaction plugin", () => {
     ).toEqual(expect.arrayContaining([expect.stringContaining("/posts/post-session/reactions/eyes")]));
   });
 
+  it("settles a same-session steered message with the active lifecycle", async () => {
+    vi.useFakeTimers();
+    const fetchMock = installLifecycleFetchMock();
+    const sessionKey = "agent:main:mattermost:channel:town-square:thread:steer-root";
+
+    await dispatch(
+      { messageId: "post-active", sessionKey },
+      { channelId: "mattermost", accountId: "default", sessionKey },
+    );
+    await dispatchHook(
+      "model_call_started",
+      { runId: "run-active" },
+      { runId: "run-active", sessionKey },
+    );
+    await vi.advanceTimersByTimeAsync(700);
+
+    await dispatch(
+      { messageId: "post-steered", sessionKey },
+      { channelId: "mattermost", accountId: "default", sessionKey },
+    );
+    await dispatchHook(
+      "model_call_started",
+      { runId: "run-active" },
+      { runId: "run-active", sessionKey },
+    );
+    await vi.advanceTimersByTimeAsync(700);
+    await dispatchHook(
+      "agent_end",
+      { runId: "run-active", success: true, messages: [] },
+      { runId: "run-active", sessionKey },
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushPromises();
+
+    expect(
+      reactionPosts(fetchMock)
+        .filter((post) => post.post_id === "post-active")
+        .map((post) => post.emoji_name),
+    ).toEqual(["eyes", "brain", "white_check_mark"]);
+    expect(
+      reactionPosts(fetchMock)
+        .filter((post) => post.post_id === "post-steered")
+        .map((post) => post.emoji_name),
+    ).toEqual(["eyes", "brain", "white_check_mark"]);
+  });
+
   it("keeps ack-only behavior when status reactions are disabled", async () => {
     vi.useFakeTimers();
     configFile = defaultConfig({

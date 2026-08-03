@@ -1,6 +1,6 @@
 {
   "name": "openclaw-mattermost-ack-reaction",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Adds acknowledgement and lifecycle status reactions to accepted inbound Mattermost messages (temporary workaround for openclaw/openclaw#99277).",
   "type": "module",
   "private": true,

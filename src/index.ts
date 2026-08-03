@@ -130,7 +130,7 @@ export default definePluginEntry({
           return;
         }
 
-        if (settings.statusReactionsEnabled && lifecycleKey && lifecycleReserved) {
+        if (settings.statusReactionsEnabled && lifecycleKey) {
           const controller = createMattermostStatusController({
             baseUrl: settings.baseUrl,
             botToken: settings.botToken,
@@ -141,7 +141,11 @@ export default definePluginEntry({
             onLog: (message) => api.logger.warn?.(message),
           });
           controller.setQueued();
-          lifecycleStore.register(lifecycleKey, controller);
+          if (lifecycleReserved) {
+            lifecycleStore.register(lifecycleKey, controller);
+          } else if (settings.queueMode === "steer") {
+            lifecycleStore.join(lifecycleKey, controller);
+          }
         } else if (settings.statusReactionsEnabled && !lifecycleKey) {
           logOnce(
             "missing-lifecycle-key",

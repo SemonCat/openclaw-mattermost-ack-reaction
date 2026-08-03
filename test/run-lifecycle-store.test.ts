@@ -51,6 +51,51 @@ describe("createRunLifecycleStore", () => {
     store.disposeAll();
   });
 
+  it("mirrors lifecycle updates and terminal cleanup to a joined steer controller", async () => {
+    vi.useFakeTimers();
+    const store = createRunLifecycleStore({ terminalSettleMs: 0 });
+    const active = createController();
+    const steered = createController();
+    store.reserve("session-steer");
+    store.register("session-steer", active);
+
+    expect(store.join("session-steer", steered)).toBe(true);
+    store.update("session-steer", (controller) => controller.setThinking());
+    store.finish("session-steer", true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(active.setThinking).toHaveBeenCalledOnce();
+    expect(steered.setThinking).toHaveBeenCalledOnce();
+    expect(active.setDone).toHaveBeenCalledOnce();
+    expect(steered.setDone).toHaveBeenCalledOnce();
+  });
+
+  it("allows the next same-session turn while prior terminal cleanup is still resolving", async () => {
+    vi.useFakeTimers();
+    let resolveDone: (() => void) | undefined;
+    const previous = createController({
+      setDone: vi.fn(
+        async () =>
+          await new Promise<void>((resolve) => {
+            resolveDone = resolve;
+          }),
+      ),
+    });
+    const next = createController();
+    const store = createRunLifecycleStore({ terminalSettleMs: 0 });
+    store.reserve("same-session");
+    store.register("same-session", previous);
+    store.finish("same-session", true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.reserve("same-session")).toBe(true);
+    expect(store.register("same-session", next)).toBe(true);
+    store.update("same-session", (controller) => controller.setThinking());
+
+    expect(next.setThinking).toHaveBeenCalledOnce();
+    resolveDone?.();
+  });
+
   it("cancels a provisional agent_end when retry activity resumes", async () => {
     vi.useFakeTimers();
     const store = createRunLifecycleStore({ terminalSettleMs: 1000 });

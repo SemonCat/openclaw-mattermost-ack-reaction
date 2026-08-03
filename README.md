@@ -99,7 +99,7 @@ To install it locally:
 npm install
 npm run build
 npm pack
-openclaw plugins install npm-pack:/path/to/openclaw-mattermost-ack-reaction-0.2.2.tgz
+openclaw plugins install npm-pack:/path/to/openclaw-mattermost-ack-reaction-0.2.3.tgz
 ```
 
 ## Scope semantics (`messages.ackReactionScope`)
@@ -153,9 +153,16 @@ If you rely on one of the unsupported scopes, set
   committing a terminal reaction and cancels it when model/tool/compaction
   activity resumes with the same lifecycle correlation key. A retry that
   starts after that window cannot be distinguished from a true terminal run.
-- **Same-session concurrency is serialized by OpenClaw.** The plugin prefers
-  `sessionKey` because Mattermost's `message_received` hook currently omits
-  `runId`; this relies on OpenClaw's per-session turn serialization.
+- **Steered messages share the active lifecycle.** Mattermost's
+  `message_received` hook currently omits `runId`, so another inbound message
+  in the same session would otherwise keep its initial ack forever. Under the
+  default/global/per-channel `steer` queue mode, the plugin joins that message
+  to the active session controller so both reactions settle together.
+- **Non-steer per-session overrides cannot be observed.** The public hook does
+  not expose the final queue-admission result or a persisted per-session queue
+  override. Global/per-channel `followup`, `collect`, and `interrupt` modes are
+  not joined to an active lifecycle; an inline or persisted override can still
+  make correlation best-effort until OpenClaw exposes that admission metadata.
 - **REST cleanup is best-effort.** A failed add is not tracked or removed. A
   failed terminal delete is logged but can leave that transient reaction in
   Mattermost because the lifecycle hook must remain non-blocking.

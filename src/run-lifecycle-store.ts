@@ -3,7 +3,8 @@ import type { StatusReactionController } from "openclaw/plugin-sdk/channel-feedb
 type ControllerUpdate = (controller: StatusReactionController) => Promise<void> | void;
 
 type RunEntry = {
-  controller?: StatusReactionController;
+  controllers: StatusReactionController[];
+  primaryRegistered: boolean;
   pending: ControllerUpdate[];
   staleTimer: ReturnType<typeof setTimeout>;
   terminalTimer?: ReturnType<typeof setTimeout>;
@@ -15,6 +16,8 @@ export type RunLifecycleStore = {
   reserve(runId: string): boolean;
   /** Attaches the controller and replays any lifecycle updates that raced the initial request. */
   register(runId: string, controller: StatusReactionController): boolean;
+  /** Joins a same-session steered message to the lifecycle that is already active. */
+  join(runId: string, controller: StatusReactionController): boolean;
   /** Applies an activity update only to a run previously reserved by this plugin. */
   update(runId: string, update: ControllerUpdate): boolean;
   /** Schedules an irreversible terminal update unless retry activity resumes first. */
@@ -42,8 +45,10 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
   const entries = new Map<string, RunEntry>();
 
   function runStaleCleanup(runId: string, entry: RunEntry): void {
-    if (!entry.terminal && entry.controller && options?.onStale) {
-      void Promise.resolve(options.onStale(runId, entry.controller)).catch(() => undefined);
+    if (!entry.terminal && options?.onStale) {
+      for (const controller of entry.controllers) {
+        void Promise.resolve(options.onStale(runId, controller)).catch(() => undefined);
+      }
     }
   }
 
@@ -67,11 +72,12 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
   }
 
   function invokeUpdate(entry: RunEntry, update: ControllerUpdate): void {
-    if (!entry.controller) {
+    if (!entry.primaryRegistered) {
       entry.pending.push(update);
-      return;
     }
-    void Promise.resolve(update(entry.controller)).catch(() => undefined);
+    for (const controller of entry.controllers) {
+      void Promise.resolve(update(controller)).catch(() => undefined);
+    }
   }
 
   function commitTerminal(runId: string, entry: RunEntry, success: boolean): void {
@@ -85,20 +91,23 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
     const terminalUpdate: ControllerUpdate = (controller) =>
       success ? controller.setDone() : controller.setError();
 
-    if (!entry.controller) {
+    if (!entry.primaryRegistered) {
       entry.pending.push(terminalUpdate);
-      entry.staleTimer = armStaleTimer(runId, entry);
-      return;
     }
 
-    const terminalPromise = Promise.resolve(terminalUpdate(entry.controller));
+    const terminalPromise = Promise.all(
+      entry.controllers.map((controller) => Promise.resolve(terminalUpdate(controller))),
+    );
     void terminalPromise
       .catch(() => undefined)
       .finally(() => {
-        if (entries.get(runId) === entry) {
+        if (entries.get(runId) === entry && entry.primaryRegistered) {
           entries.delete(runId);
         }
       });
+    if (!entry.primaryRegistered) {
+      entry.staleTimer = armStaleTimer(runId, entry);
+    }
   }
 
   function clearEntry(runId: string): RunEntry | undefined {
@@ -116,10 +125,19 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
 
   return {
     reserve(runId) {
-      if (!runId || entries.has(runId)) {
+      if (!runId) {
         return false;
       }
+      const existing = entries.get(runId);
+      if (existing && (!existing.terminal || !existing.primaryRegistered)) {
+        return false;
+      }
+      // A terminal controller may still be awaiting its final REST cleanup.
+      // Replace only the map slot; its promise keeps its own entry alive and
+      // its guarded `finally` cannot delete this new same-session generation.
       const entryWithoutTimer: Omit<RunEntry, "staleTimer"> = {
+        controllers: [],
+        primaryRegistered: false,
         pending: [],
         terminal: false,
       };
@@ -132,10 +150,11 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
     },
     register(runId, controller) {
       const entry = entries.get(runId);
-      if (!entry || entry.controller) {
+      if (!entry || entry.primaryRegistered) {
         return false;
       }
-      entry.controller = controller;
+      entry.primaryRegistered = true;
+      entry.controllers.push(controller);
       const pending = entry.pending.splice(0);
       const pendingPromises: Promise<void>[] = [];
       for (const update of pending) {
@@ -155,6 +174,15 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
       } else {
         entry.staleTimer = armStaleTimer(runId, entry);
       }
+      return true;
+    },
+    join(runId, controller) {
+      const entry = entries.get(runId);
+      if (!entry || entry.terminal) {
+        return false;
+      }
+      entry.controllers.push(controller);
+      entry.staleTimer = armStaleTimer(runId, entry);
       return true;
     },
     update(runId, update) {
@@ -184,10 +212,19 @@ export function createRunLifecycleStore(options?: RunLifecycleStoreOptions): Run
       return true;
     },
     cancel(runId) {
-      clearEntry(runId);
+      const entry = entries.get(runId);
+      if (!entry) {
+        return;
+      }
+      if (entry.controllers.length === 0) {
+        clearEntry(runId);
+        return;
+      }
+      entry.primaryRegistered = true;
+      entry.staleTimer = armStaleTimer(runId, entry);
     },
     get(runId) {
-      return entries.get(runId)?.controller;
+      return entries.get(runId)?.controllers[0];
     },
     disposeAll() {
       for (const runId of Array.from(entries.keys())) {
