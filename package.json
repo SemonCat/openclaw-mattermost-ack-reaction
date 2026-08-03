@@ -1,0 +1,50 @@
+{
+  "name": "openclaw-mattermost-ack-reaction",
+  "version": "0.2.2",
+  "description": "Adds acknowledgement and lifecycle status reactions to accepted inbound Mattermost messages (temporary workaround for openclaw/openclaw#99277).",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.2-beta.7"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "openclaw": "2026.7.2-beta.7",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.7.2-beta.7",
+      "minGatewayVersion": "2026.7.2-beta.7"
+    },
+    "build": {
+      "openclawVersion": "2026.7.2-beta.7",
+      "pluginSdkVersion": "2026.7.2-beta.7"
+    }
+  }
+}

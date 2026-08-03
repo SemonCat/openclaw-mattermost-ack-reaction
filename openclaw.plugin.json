@@ -1,0 +1,13 @@
+{
+  "id": "mattermost-ack-reaction",
+  "name": "Mattermost Ack Reaction",
+  "description": "Adds acknowledgement and lifecycle status reactions to accepted inbound Mattermost messages. Temporary workaround for openclaw/openclaw#99277 until core Mattermost support ships.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
