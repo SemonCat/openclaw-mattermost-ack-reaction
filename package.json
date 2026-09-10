@@ -32,7 +32,7 @@
     "@types/node": "^24.0.0",
     "openclaw": "2026.7.2-beta.7",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "vitest": "^5.0.0"
   },
   "openclaw": {
     "extensions": [
