@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "openclaw": "2026.7.2-beta.7",
+    "openclaw": "2026.9.8",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   },
